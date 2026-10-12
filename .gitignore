@@ -1,0 +1,12 @@
+# Xcode / build artifacts
+build/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+*.ipa
+*.app
+Payload/
+
+# Python
+__pycache__/

