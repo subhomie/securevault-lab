@@ -24,7 +24,15 @@ jobs:
         run: brew install xcodegen
 
       - name: Generate Xcode project
-        run: xcodegen generate
+        run: |
+          xcodegen generate
+          # Latest XcodeGen emits objectVersion 77 (Xcode 16 format); the
+          # macos-14 runner ships Xcode 15.4 which can't open it. Downgrade to
+          # a broadly compatible format.
+          PBX=SecureVault.xcodeproj/project.pbxproj
+          sed -i '' -E 's/objectVersion = [0-9]+;/objectVersion = 56;/' "$PBX"
+          sed -i '' -E 's/compatibilityVersion = "[^"]*";/compatibilityVersion = "Xcode 14.0";/' "$PBX"
+          grep -E 'objectVersion|compatibilityVersion' "$PBX"
 
       - name: Build (unsigned, Release, device)
         run: |
